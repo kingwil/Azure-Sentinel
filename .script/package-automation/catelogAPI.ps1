@@ -125,12 +125,12 @@ function GetPackageVersion($defaultPackageVersion, $offerId, $offerDetails, $pac
 {
     if ($packageVersionAttribute)
     {
-        $userInputMajor,$userInputMinor,$userInputBuild,$userInputRevision = $userInputPackageVersion.split(".")
-        $defaultMajor,$defaultMinor,$defaultBuild,$defaultRevision = $defaultPackageVersion.split(".")
+        $sysVerUserInput = [System.Version]::new($userInputPackageVersion)
+        $sysVerDefault = [System.Version]::new($defaultPackageVersion)
 
-        if ($userInputMajor -ge '2' -and $userInputMinor -gt $defaultMinor)
+        if ($sysVerUserInput.Major -ge 2 -and $sysVerUserInput -gt $sysVerDefault)
         {
-            #return as is value of package version as middle value is greater
+            #return as user supplied version is greater
             return $userInputPackageVersion 
         }
     }
