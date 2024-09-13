@@ -554,7 +554,6 @@ validateKeyVault() {
 	az keyvault secret list --id "https://$kv.vault.azure.net/" >/dev/null 2>&1
 	if [ ! $? -eq 0 ]; then
 		echo "Cannot connect to Key Vault $kv. Agent identity must have 'Key Vault Secrets User' role or list, get secret permissions on the Key Vault."
-		exit 1
 	fi
 }
 
@@ -563,7 +562,6 @@ if [ "$MODE" == "kvmi" ]; then
 	az login --identity --allow-no-subscriptions >/dev/null 2>&1
 	if [ ! $? -eq 0 ]; then
 		printf 'VM is not set with managed identity or the AZ client was not installed correctly.\nSet and grant relevant Key Vault permissions and make sure that Azure CLI is installed by running "az login"\nFor more information check - https://docs.microsoft.com/cli/azure/install-azure-cli'
-		exit 1
 	fi
 	validateKeyVault
 elif [ "$MODE" == "kvsi" ]; then
