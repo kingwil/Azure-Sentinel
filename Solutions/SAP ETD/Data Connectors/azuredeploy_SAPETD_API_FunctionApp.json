@@ -1,0 +1,587 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"functionAppName": {
+			"type": "string"
+		},
+		"location": {
+			"type": "string",
+			"defaultValue": "[resourceGroup().location]"
+		},
+		"storageAccountName": {
+			"type": "string"
+		},
+		"sentinelWorkspace": {
+			"type": "object"
+		},
+		"appInsightsWorkspaceResourceId": {
+			"type": "string"
+		},
+		"roleAssignmentDcr": {
+			"type": "bool",
+			"defaultValue": false
+		},
+		"roleAssignmentStorage": {
+			"type": "bool",
+			"defaultValue": false
+		},
+		"roleAssignmentKv": {
+			"type": "bool",
+			"defaultValue": false
+		},
+		"tagsByResource": {
+			"type": "object",
+			"defaultValue": {}
+		},
+		"etdApiHost": {
+			"type": "string"
+		},
+		"etdUaaUrl": {
+			"type": "string"
+		},
+		"secretValue": {
+			"type": "securestring"
+		},
+		"keyVault": {
+			"type": "object"
+		},
+		"identity": {
+			"type": "object"
+		}
+	},
+	"variables": {
+		"serverFarmName": "[concat('serverfarm_', parameters('functionAppName'))]",
+		"appInsightsLogName": "[concat(parameters('functionAppName'),'Logs')]",
+		"clv2TableNameAlerts": "ETDAlerts_CL",
+		"dataCollectionEndpointName": "Microsoft-Sentinel-SAPETD-DCE",
+		"dataCollectionRuleName": "Microsoft-Sentinel-SAPETD-DCR",
+		"dCRStreamNameAlerts": "[concat('Custom-', variables('clv2TableNameAlerts'))]",
+		"monitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb",
+		"keyVaultSecretUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6",
+		"storageBlobDataOwnerRoleId": "b7e6dc6d-f1e8-4753-8033-0f276bb0955b",
+		"sapEtdTableDeploymentName": "ETDTableDeployment"
+	},
+	"resources": [
+		{
+			"condition": "[equals(parameters('keyVault').useExistingKeyVault, false())]",
+			"type": "Microsoft.KeyVault/vaults",
+			"apiVersion": "2023-02-01",
+			"name": "[parameters('keyVault').keyVaultName]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.KeyVault/vaults'), parameters('tagsByResource')['Microsoft.KeyVault/vaults'], json('{}')) ]",
+			"location": "[parameters('location')]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+			],
+			"properties": {
+				"tenantId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2022-03-01', 'full').identity.tenantId]",
+				"enableRbacAuthorization": true,
+				"enableSoftDelete": true,
+				"softDeleteRetentionInDays": 90,
+				"enabledForDeployment": false,
+				"enabledForDiskEncryption": false,
+				"enabledForTemplateDeployment": false,
+				"sku": {
+					"name": "standard",
+					"family": "A"
+				},
+				"networkAcls": {
+					"defaultAction": "Allow",
+					"bypass": "AzureServices"
+				}
+			}
+		},
+		{
+			"condition": "[equals(parameters('keyVault').useExistingKeyVault, false())]",
+			"type": "Microsoft.KeyVault/vaults/secrets",
+			"apiVersion": "2023-02-01",
+			"name": "[format('{0}/{1}', parameters('keyVault').keyVaultName, parameters('keyVault').secretName)]",
+			"properties": {
+				"value": "[parameters('secretValue')]"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.KeyVault/vaults', parameters('keyVault').keyVaultName)]"
+			]
+		},
+		{
+			"name": "[variables('sapEtdTableDeploymentName')]",
+			"type": "Microsoft.Resources/deployments",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Resources/deployments'), parameters('tagsByResource')['Microsoft.Resources/deployments'], json('{}')) ]",
+			"apiVersion": "2022-09-01",
+			"resourceGroup": "[parameters('sentinelWorkspace').resourceGroup]",
+			"properties": {
+				"mode": "Incremental",
+				"template": {
+					"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+					"contentVersion": "1.0.0.0",
+					"variables": {},
+					"resources": [
+						{
+							"type": "Microsoft.OperationalInsights/workspaces/tables",
+							"apiVersion": "2021-12-01-preview",
+							"name": "[concat(parameters('sentinelWorkspace').name, '/', variables('clv2TableNameAlerts'))]",
+							"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.OperationalInsights/workspaces/tables'), parameters('tagsByResource')['Microsoft.OperationalInsights/workspaces/tables'], json('{}')) ]",
+							"properties": {
+								"schema": {
+									"name": "[variables('clv2TableNameAlerts')]",
+									"columns": [
+										{
+											"name": "AlertId",
+											"type": "int"
+										},
+										{
+											"name": "CreationTimestamp",
+											"type": "datetime"
+										},
+										{
+											"name": "EventLogType",
+											"type": "string"
+										},
+										{
+											"name": "EventSourceId",
+											"type": "string"
+										},
+										{
+											"name": "Id",
+											"type": "string"
+										},
+										{
+											"name": "MaxTimestamp",
+											"type": "datetime"
+										},
+										{
+											"name": "Measure",
+											"type": "int"
+										},
+										{
+											"name": "MinTimestamp",
+											"type": "datetime"
+										},
+										{
+											"name": "OriginalEvent",
+											"type": "string"
+										},
+										{
+											"name": "PatternDescription",
+											"type": "string"
+										},
+										{
+											"name": "PatternName",
+											"type": "string"
+										},
+										{
+											"name": "Score",
+											"type": "int"
+										},
+										{
+											"name": "Status",
+											"type": "string"
+										},
+										{
+											"name": "TechnicalLogCollectorIPAddress",
+											"type": "string"
+										},
+										{
+											"name": "TechnicalLogCollectorName",
+											"type": "string"
+										},
+										{
+											"name": "TechnicalLogCollectorPort",
+											"type": "int"
+										},
+										{
+											"name": "Threshold",
+											"type": "int"
+										},
+										{
+											"name": "Timestamp",
+											"type": "datetime"
+										},
+										{
+											"name": "Version",
+											"type": "string"
+										},
+										{
+											"name": "TimeGenerated",
+											"type": "datetime"
+										}
+									]
+								}
+							}
+						}
+					],
+					"outputs": {}
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Insights/components",
+			"apiVersion": "2020-02-02",
+			"name": "[variables('appInsightsLogName')]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Insights/components'), parameters('tagsByResource')['Microsoft.Insights/components'], json('{}')) ]",
+			"location": "[parameters('location')]",
+			"kind": "web",
+			"properties": {
+				"Application_Type": "web",
+				"ApplicationId": "[parameters('functionAppName')]",
+				"WorkspaceResourceId": "[parameters('appInsightsWorkspaceResourceId')]"
+			}
+		},
+		{
+			"type": "Microsoft.Web/serverfarms",
+			"apiVersion": "2022-03-01",
+			"name": "[variables('serverFarmName')]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Web/serverfarms'), parameters('tagsByResource')['Microsoft.Web/serverfarms'], json('{}')) ]",
+			"location": "[parameters('location')]",
+			"sku": {
+				"name": "Y1",
+				"tier": "Dynamic",
+				"size": "Y1",
+				"family": "Y",
+				"capacity": 0
+			},
+			"kind": "functionapp",
+			"properties": {
+				"perSiteScaling": false,
+				"elasticScaleEnabled": false,
+				"maximumElasticWorkerCount": 1,
+				"isSpot": false,
+				"reserved": true,
+				"isXenon": false,
+				"hyperV": false,
+				"targetWorkerCount": 0,
+				"targetWorkerSizeId": 0,
+				"zoneRedundant": false
+			}
+		},
+		{
+			"type": "Microsoft.Storage/storageAccounts",
+			"apiVersion": "2022-09-01",
+			"name": "[parameters('storageAccountName')]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Storage/storageAccounts'), parameters('tagsByResource')['Microsoft.Storage/storageAccounts'], json('{}')) ]",
+			"location": "[parameters('location')]",
+			"kind": "StorageV2",
+			"sku": {
+				"name": "Standard_LRS",
+				"tier": "Standard"
+			},
+			"properties": {
+				"minimumTlsVersion": "TLS1_2",
+				"supportsHttpsTrafficOnly": true,
+				"allowBlobPublicAccess": false,
+				"allowSharedKeyAccess": false,
+				"defaultToOAuthAuthentication": true,
+				"allowedCopyScope": "AAD",
+				"allowCrossTenantReplication": false,
+				"encryption": {
+					"keySource": "Microsoft.Storage",
+					"services": {
+						"blob": {
+							"enabled": true
+						},
+						"file": {
+							"enabled": true
+						},
+						"table": {
+							"enabled": true
+						},
+						"queue": {
+							"enabled": true
+						}
+					},
+					"requireInfrastructureEncryption": true
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/sites",
+			"apiVersion": "2022-03-01",
+			"name": "[parameters('functionAppName')]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Web/sites'), parameters('tagsByResource')['Microsoft.Web/sites'], json('{}')) ]",
+			"location": "[parameters('location')]",
+			"kind": "functionapp,linux",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/serverfarms', variables('serverFarmName'))]",
+				"[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+				"[resourceId('Microsoft.Insights/components', variables('appInsightsLogName'))]",
+				"[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))]"
+			],
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"properties": {
+				"httpsOnly": true,
+				"publicNetworkAccess": "Disabled",
+				"keyVaultReferenceIdentity": "SystemAssigned",
+				"serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('serverFarmName'))]",
+				"siteProperties": {
+					"properties": [
+						{
+							"name": "LinuxFxVersion",
+							"value": "Python|3.10"
+						}
+					]
+				},
+				"siteConfig": {
+					"linuxFxVersion": "Python|3.10",
+					"ftpsState": "Disabled",
+					"appSettings": [
+						{
+							"name": "AzureWebJobsStorage__accountName",
+							"value": "[toLower(parameters('storageAccountName'))]"
+						},
+						{
+							"name": "FUNCTIONS_EXTENSION_VERSION",
+							"value": "~4"
+						},
+						{
+							"name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+							"value": "[reference(resourceId('microsoft.insights/components', variables('appInsightsLogName'))).ConnectionString]"
+						},
+						{
+							"name": "FUNCTIONS_WORKER_RUNTIME",
+							"value": "python"
+						},
+						{
+							"name": "AzureWebJobsFeatureFlags",
+							"value": "EnableWorkerIndexing",
+							"slotSetting": false
+						},
+						{
+							"name": "ETD_API_HOST",
+							"value": "[parameters('etdApiHost')]",
+							"slotSetting": false
+						},
+						{
+							"name": "ETD_UAA_URL",
+							"value": "[parameters('etdUaaUrl')]",
+							"slotSetting": false
+						},
+						{
+							"name": "ETD_API_TIMEOUT_SECONDS",
+							"value": "30",
+							"slotSetting": false
+						},
+						{
+							"name": "DCR_DCE_URL",
+							"value": "[reference(variables('dataCollectionEndpointName')).logsIngestion.endpoint]",
+							"slotSetting": false
+						},
+						{
+							"name": "DCR_IMMUTABLE_ID",
+							"value": "[reference(variables('dataCollectionRuleName')).immutableId]",
+							"slotSetting": false
+						},
+						{
+							"name": "DCR_STREAM_ALERTS",
+							"value": "[variables('dCRStreamNameAlerts')]",
+							"slotSetting": false
+						},
+						{
+							"name": "TIMER_SCHEDULE",
+							"value": "0 */10 * * * *",
+							"slotSetting": false
+						},
+						{
+							"name": "ETD_CLIENT_ID",
+							"value": "[parameters('identity').clientId]",
+							"slotSetting": false
+						},
+						{
+							"name": "ETD_CLIENT_SECRET",
+							"value": "[concat('@Microsoft.KeyVault(VaultName=', parameters('keyVault').keyVaultName, ';SecretName=', parameters('keyVault').secretName,')')]",
+							"slotSetting": false
+						},
+						{
+							"name": "WEBSITE_RUN_FROM_PACKAGE",
+							"value": "https://aka.ms/sentinel-sapetd-functionapp-v1"
+						}
+					]
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Insights/dataCollectionRules",
+			"apiVersion": "2021-09-01-preview",
+			"name": "[variables('dataCollectionRuleName')]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Insights/dataCollectionRules'), parameters('tagsByResource')['Microsoft.Insights/dataCollectionRules'], json('{}')) ]",
+			"location": "[parameters('sentinelWorkspace').location]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))]"
+			],
+			"properties": {
+				"dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints',variables('dataCollectionEndpointName'))]",
+				"streamDeclarations": {
+					"[variables('dCRStreamNameAlerts')]": {
+						"columns": [
+							{
+								"name": "Version",
+								"type": "string"
+							},
+							{
+								"name": "AlertId",
+								"type": "int"
+							},
+							{
+								"name": "PatternName",
+								"type": "string"
+							},
+							{
+								"name": "PatternDescription",
+								"type": "string"
+							},
+							{
+								"name": "Status",
+								"type": "string"
+							},
+							{
+								"name": "CreationTimestamp",
+								"type": "datetime"
+							},
+							{
+								"name": "MinTimestamp",
+								"type": "datetime"
+							},
+							{
+								"name": "MaxTimestamp",
+								"type": "datetime"
+							},
+							{
+								"name": "Score",
+								"type": "int"
+							},
+							{
+								"name": "Threshold",
+								"type": "int"
+							},
+							{
+								"name": "Measure",
+								"type": "int"
+							},
+							{
+								"name": "Id",
+								"type": "string"
+							},
+							{
+								"name": "Timestamp",
+								"type": "datetime"
+							},
+							{
+								"name": "OriginalEvent",
+								"type": "string"
+							},
+							{
+								"name": "EventLogType",
+								"type": "string"
+							},
+							{
+								"name": "EventSourceId",
+								"type": "string"
+							},
+							{
+								"name": "TechnicalLogCollectorName",
+								"type": "string"
+							},
+							{
+								"name": "TechnicalLogCollectorIPAddress",
+								"type": "string"
+							},
+							{
+								"name": "TechnicalLogCollectorPort",
+								"type": "int"
+							}
+						]
+					}
+				},
+				"dataSources": {},
+				"destinations": {
+					"logAnalytics": [
+						{
+							"workspaceResourceId": "[parameters('sentinelWorkspace').id]",
+							"name": "clv2ws1"
+						}
+					]
+				},
+				"dataFlows": [
+					{
+						"streams": [
+							"[variables('dCRStreamNameAlerts')]"
+						],
+						"destinations": [
+							"clv2ws1"
+						],
+						"transformKql": "source | extend TimeGenerated=now()",
+						"outputStream": "[variables('dCRStreamNameAlerts')]"
+					}
+				]
+			}
+		},
+		{
+			"type": "Microsoft.Insights/dataCollectionEndpoints",
+			"apiVersion": "2021-09-01-preview",
+			"name": "[variables('dataCollectionEndpointName')]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Insights/dataCollectionEndpoints'), parameters('tagsByResource')['Microsoft.Insights/dataCollectionEndpoints'], json('{}')) ]",
+			"location": "[parameters('sentinelWorkspace').location]",
+			"dependsOn": [
+				"[variables('sapEtdTableDeploymentName')]"
+			],
+			"properties": {
+				"networkAcls": {
+					"publicNetworkAccess": "Enabled"
+				}
+			}
+		},
+		{
+			"condition": "[parameters('roleAssignmentDcr')]",
+			"type": "Microsoft.Authorization/roleAssignments",
+			"apiVersion": "2022-04-01",
+			"name": "[guid(parameters('functionAppName'), variables('dataCollectionRuleName'), variables('monitoringMetricsPublisherRoleId'))]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Authorization/roleAssignments'), parameters('tagsByResource')['Microsoft.Authorization/roleAssignments'], json('{}')) ]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+				"[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))]"
+			],
+			"properties": {
+				"roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', variables('monitoringMetricsPublisherRoleId') )]",
+				"principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2022-03-01', 'full').identity.principalId]",
+				"principalType": "ServicePrincipal"
+			},
+			"scope": "[concat('Microsoft.Insights/dataCollectionRules', '/', variables('dataCollectionRuleName'))]"
+		},
+		{
+			"condition": "[parameters('roleAssignmentKv')]",
+			"type": "Microsoft.Authorization/roleAssignments",
+			"name": "[guid(parameters('functionAppName'), parameters('keyVault').keyVaultName, variables('keyVaultSecretUserRoleId'))]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Authorization/roleAssignments'), parameters('tagsByResource')['Microsoft.Authorization/roleAssignments'], json('{}')) ]",
+			"apiVersion": "2022-04-01",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+				"[resourceId('Microsoft.KeyVault/vaults', parameters('keyVault').keyVaultName)]"
+			],
+			"properties": {
+				"roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', variables('keyVaultSecretUserRoleId') )]",
+				"principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2022-03-01', 'full').identity.principalId]",
+				"principalType": "ServicePrincipal"
+			},
+			"scope": "[concat('Microsoft.KeyVault/vaults', '/', parameters('keyVault').keyVaultName)]"
+		},
+		{
+			"condition": "[parameters('roleAssignmentStorage')]",
+			"type": "Microsoft.Authorization/roleAssignments",
+			"apiVersion": "2022-04-01",
+			"name": "[guid(parameters('functionAppName'), parameters('storageAccountName'), variables('storageBlobDataOwnerRoleId'))]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Authorization/roleAssignments'), parameters('tagsByResource')['Microsoft.Authorization/roleAssignments'], json('{}')) ]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+				"[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+			],
+			"properties": {
+				"roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', variables('storageBlobDataOwnerRoleId'))]",
+				"principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2022-03-01', 'full').identity.principalId]",
+				"principalType": "ServicePrincipal"
+			},
+			"scope": "[concat('Microsoft.Storage/storageAccounts', '/', parameters('storageAccountName'))]"
+		}
+	],
+	"outputs": {}
+}
