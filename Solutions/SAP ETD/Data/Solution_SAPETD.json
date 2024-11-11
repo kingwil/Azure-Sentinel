@@ -1,7 +1,7 @@
 {
     "Name": "SAP ETD",
     "Author": "SAP",
-    "Logo": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/<your logo>.svg\" width=\"75px\" height=\"75px\">",
+    "Logo": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/SAPBTP.svg\" width=\"75px\" height=\"75px\">",
     "Description": "enter the description of the solution to be shown in Content Hub here",
     "WorkbookDescription": [],
     "Workbooks": [],
