@@ -1,17 +1,16 @@
 {
 	"publisherId": "sapetd",
 	"offerId": "sapetd-alerts",
-	"firstPublishDate": "2024-10-21",
-	"lastPublishDate": "2024-10-21",
+	"firstPublishDate": "2024-10-29",
+	"lastPublishDate": "2024-10-29",
 	"providers": ["SAP"],
 	"categories": {
-		"domains" : ["Security - Threat Protection","Identity"],
+		"domains" : ["Security - Threat Protection","Identity", "Application Security", "Cyber Security Alerts"],
 		"verticals": []
 	},
 	"support": {
 	  "name": "SAP",
-	  "email": "support@sap.com",
 	  "tier": "Partner",
-	  "link": "https://sapetd.com"
+	  "link": "https://help.sap.com/docs/SAP_ENTERPRISE_THREAT_DETECTION_CLOUD_EDITION"
 	}
 }
