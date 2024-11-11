@@ -5,7 +5,9 @@
     "Description": "enter the description of the solution to be shown in Content Hub here",
     "WorkbookDescription": [],
     "Workbooks": [],
-    "Analytic Rules": [],
+    "Analytic Rules": [
+        "/Analytic Rules/SAP ETD - Synch alerts.json"
+    ],
     "Playbooks": [],
     "PlaybookDescription": [],
     "Parsers": [],
