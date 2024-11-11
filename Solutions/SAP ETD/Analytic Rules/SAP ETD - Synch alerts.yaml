@@ -15,7 +15,7 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics: []
 relevantTechniques: []
-query: |+
+query: |
   let minThreshold= 1;
   let minScore= 50;
   let lookBack= 70d;
@@ -30,14 +30,11 @@ query: |+
   | mv-expand NewEvent to typeof(string)
   | parse NewEvent with Key: string ":" Value: string
   | extend
-      Value= iff(isempty(Key) and isnotempty(NewEvent), NewEvent, Value)
-      ,
+      Value= iff(isempty(Key) and isnotempty(NewEvent), NewEvent, Value),
       Key= iff(isempty(Key) and isnotempty(NewEvent), EventLogType, Key)
   | extend KV= bag_pack(Key, Value)
   | summarize
-      KeyValues= make_bag(KV)
-      ,
-      take_any(CreationTimestamp, MinTimestamp, MaxTimestamp, EventLogType, Measure, PatternDescription, PatternName, Status, Threshold, OriginalEvent)
+      KeyValues= make_bag(KV), take_any(CreationTimestamp, MinTimestamp, MaxTimestamp, EventLogType, Measure, PatternDescription, PatternName, Status, Threshold, OriginalEvent)
       by AlertId, Id
   | extend
       SystemId= KeyValues.sid,
@@ -46,7 +43,6 @@ query: |+
       Instance= KeyValues.instance_name,
       User= KeyValues.user_name,
       IP= KeyValues.user_ip
-
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 entityMappings:
@@ -74,4 +70,4 @@ alertDetailsOverride:
 customDetails:
   SAP_User: User
   ETD_AlertID: AlertId
-version: 3.0.4
+version: 3.0.0
