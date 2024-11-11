@@ -6,7 +6,7 @@
     "WorkbookDescription": [],
     "Workbooks": [],
     "Analytic Rules": [
-        "/Analytic Rules/SAP ETD - Synch alerts.json"
+        "/Analytic Rules/SAP ETD - Synch alerts.yaml"
     ],
     "Playbooks": [],
     "PlaybookDescription": [],
