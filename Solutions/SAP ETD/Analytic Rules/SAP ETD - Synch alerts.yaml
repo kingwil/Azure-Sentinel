@@ -1,4 +1,4 @@
-id: b9bfae9d-5895-4bdd-b222-f36c297a162f
+id: 7a830484-e349-4527-85f6-7850c468c238
 kind: Scheduled
 name: SAP ETD - Synch alerts
 description: Synch alerts coming in from SAP® enterprise threat detection into Sentinel
@@ -34,7 +34,8 @@ query: |
       Key= iff(isempty(Key) and isnotempty(NewEvent), EventLogType, Key)
   | extend KV= bag_pack(Key, Value)
   | summarize
-      KeyValues= make_bag(KV), take_any(CreationTimestamp, MinTimestamp, MaxTimestamp, EventLogType, Measure, PatternDescription, PatternName, Status, Threshold, OriginalEvent)
+      KeyValues= make_bag(KV),
+      take_any(CreationTimestamp, MinTimestamp, MaxTimestamp, EventLogType, Measure, PatternDescription, PatternName, Status, Threshold, OriginalEvent)
       by AlertId, Id
   | extend
       SystemId= KeyValues.sid,

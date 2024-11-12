@@ -2,7 +2,7 @@
     "id": "SAPETDAlerts",
     "title": "SAP ETD",
     "publisher": "SAP",
-    "descriptionMarkdown": "SAP ETD description.",
+    "descriptionMarkdown": "The SAP ETD data connector enables ingestion of security alerts from ETD into Sentinel, supporting cross-correlation, alerting, and threat hunting.",
     "graphQueries": [
         {
             "metricName": "Total data received",

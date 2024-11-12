@@ -1,0 +1,539 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "SAP",
+    "comments": "Solution template for SAP ETD"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "SAP ETD",
+    "_solutionVersion": "3.0.1",
+    "solutionId": "sapetd.sapetd-alerts",
+    "_solutionId": "[variables('solutionId')]",
+    "analyticRuleObject1": {
+      "analyticRuleVersion1": "3.0.0",
+      "_analyticRulecontentId1": "7a830484-e349-4527-85f6-7850c468c238",
+      "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '7a830484-e349-4527-85f6-7850c468c238')]",
+      "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('7a830484-e349-4527-85f6-7850c468c238')))]",
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','7a830484-e349-4527-85f6-7850c468c238','-', '3.0.0')))]"
+    },
+    "uiConfigId1": "SAPETDAlerts",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "SAPETDAlerts",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
+    "dataConnectorVersion1": "1.0.0",
+    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SAP ETD - Synch alerts_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "Synch alerts coming in from SAP® enterprise threat detection into Sentinel (one way)",
+                "displayName": "SAP ETD - Synch alerts",
+                "enabled": false,
+                "query": "let minThreshold= 1;\nlet minScore= 50;\nlet lookBack= 70d;\nETDAlerts_CL\n// | where CreationTimestamp > ago(lookBack)\n| where PatternName <> \"Logon from external with SAP standard users\"\n| summarize arg_max(TimeGenerated, *) by AlertId, Id\n| project-away TenantId, Type, Version, EventSourceId, Technical*\n| where Threshold >= minThreshold and Score >= minScore\n| order by Timestamp\n| extend NewEvent= split(OriginalEvent, \"\\n\")\n| mv-expand NewEvent to typeof(string)\n| parse NewEvent with Key: string \":\" Value: string\n| extend\n    Value= iff(isempty(Key) and isnotempty(NewEvent), NewEvent, Value),\n    Key= iff(isempty(Key) and isnotempty(NewEvent), EventLogType, Key)\n| extend KV= bag_pack(Key, Value)\n| summarize\n    KeyValues= make_bag(KV),\n    take_any(CreationTimestamp, MinTimestamp, MaxTimestamp, EventLogType, Measure, PatternDescription, PatternName, Status, Threshold, OriginalEvent)\n    by AlertId, Id\n| extend\n    SystemId= KeyValues.sid,\n    ClienId= KeyValues.client,\n    Host= KeyValues.instance_host,\n    Instance= KeyValues.instance_name,\n    User= KeyValues.user_name,\n    IP= KeyValues.user_ip\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P2D",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "dataTypes": [
+                      "ETDAlerts_CL"
+                    ],
+                    "connectorId": "SAPETDAlerts"
+                  }
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "CloudApplication",
+                    "fieldMappings": [
+                      {
+                        "columnName": "SystemId",
+                        "identifier": "Name"
+                      },
+                      {
+                        "columnName": "ClienId",
+                        "identifier": "AppId"
+                      },
+                      {
+                        "columnName": "Instance",
+                        "identifier": "InstanceName"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "Host",
+                    "fieldMappings": [
+                      {
+                        "columnName": "Host",
+                        "identifier": "FullName"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "IP",
+                    "fieldMappings": [
+                      {
+                        "columnName": "IP",
+                        "identifier": "Address"
+                      }
+                    ]
+                  }
+                ],
+                "eventGroupingSettings": {
+                  "aggregationKind": "AlertPerResult"
+                },
+                "customDetails": {
+                  "ETD_AlertID": "AlertId",
+                  "SAP_User": "User"
+                },
+                "alertDetailsOverride": {
+                  "alertDescriptionFormat": "Alert synched from SAP® enterprise threat detection into Sentinel (one way).\n{{PatternDescription}}\n",
+                  "alertDisplayNameFormat": "SAP ETD - {{PatternName}} "
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject1').analyticRuleId1,'/'))))]",
+              "properties": {
+                "description": "SAP ETD Analytics Rule 1",
+                "parentId": "[variables('analyticRuleObject1').analyticRuleId1]",
+                "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SAP ETD",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SAP"
+                },
+                "support": {
+                  "name": "SAP",
+                  "tier": "Partner",
+                  "link": "https://help.sap.com/docs/SAP_ENTERPRISE_THREAT_DETECTION_CLOUD_EDITION"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "SAP ETD - Synch alerts",
+        "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SAP ETD data connector with template version 3.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "SAP ETD (using Azure Functions)",
+                  "publisher": "SAP",
+                  "descriptionMarkdown": "The SAP ETD data connector enables ingestion of security alerts from ETD into Sentinel, supporting cross-correlation, alerting, and threat hunting.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "ETDAlerts_CL",
+                      "baseQuery": "ETDAlerts_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "List of events by severity",
+                      "query": "ETDAlerts_CL\n            | where Message has \"TokenIssuedEvent\"\n            | extend MessageDetail = tostring(parse_json(tostring(Message.data)).message)\n            | project UpdatedOn, UserName, IPAddress = tostring(Message.ip), MessageDetail"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "ETDAlerts_CL",
+                      "lastDataReceivedQuery": "ETDAlerts_CL\n            | summarize Time = max(CreationTimestamp)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "ETDAlerts_CL\n            | summarize LastLogReceived = max(CreationTimestamp)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft.Web/sites permissions",
+                        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+                      },
+                      {
+                        "name": "Microsoft.Insights/DataCollectionEndpoints, Microsoft.Insights/DataCollectionRules",
+                        "description": "Read and write permissions to Data Collection Rules/Endpoints is required. Permissions to assign the Monitoring Metrics Publisher role to the Azure Function is required. [See the documentation to learn more about Data Collection Rules](https://docs.microsoft.com/azure/azure-monitor/platform/data-collection-rules)."
+                      },
+                      {
+                        "name": "Azure Key Vault",
+                        "description": "A Key Vault to hold SAP ETD client secret [See the documentation to learn more about Key Vault](https://docs.microsoft.com/azure/key-vault/general/overview)."
+                      },
+                      {
+                        "name": "SAP ETD service key",
+                        "description": "Connectivity and permissions to retrieve SAP ETD alerts via the API."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This connector uses Azure Functions to connect to SAP ETD alerts into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+                    },
+                    {
+                      "description": "**Step 1 - Create a an Azure Key Vault**\n\n Refer to the [Azure Key Vault quickstart guide](https://learn.microsoft.com/azure/key-vault/general/quick-create-portal) for details. This key vault will hold a client secret required to access the ETD API."
+                    },
+                    {
+                      "description": "**Step 2 - Configuration steps for the SAP ETD API**\n\nFollow the steps provided by SAP [see obtain client credentials for SAP ETD](https://<insert-link-here>). \n\n1. Take a note of the **url** (Audit Retrieval API URL), **uaa.url** (User Account and Authentication Server url) and the associated **uaa.clientid**.\n2. Add the **uaa.clientsecret** as a secret in the Key Vault created in Step 1 and take note of the **name** of the secret."
+                    },
+                    {
+                      "description": "**Step 3 - Azure Resource Manager (ARM) Template**\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-sapetd-azuredeploy)\n2. Enter the values collected in steps 1 and 2 as parameters in the ARM template. Populate Key Vault name, name of the Key Vault secret, Audit Retrieval API URL, UAA Server URL, clientid.\n3. Click **Purchase** to deploy."
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2023-04-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SAP ETD",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SAP"
+                },
+                "support": {
+                  "name": "SAP",
+                  "tier": "Partner",
+                  "link": "https://help.sap.com/docs/SAP_ENTERPRISE_THREAT_DETECTION_CLOUD_EDITION"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "contentKind": "DataConnector",
+        "displayName": "SAP ETD (using Azure Functions)",
+        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
+        "id": "[variables('_dataConnectorcontentProductId1')]",
+        "version": "[variables('dataConnectorVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "SAP ETD",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "SAP"
+        },
+        "support": {
+          "name": "SAP",
+          "tier": "Partner",
+          "link": "https://help.sap.com/docs/SAP_ENTERPRISE_THREAT_DETECTION_CLOUD_EDITION"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "SAP ETD (using Azure Functions)",
+          "publisher": "SAP",
+          "descriptionMarkdown": "The SAP ETD data connector enables ingestion of security alerts from ETD into Sentinel, supporting cross-correlation, alerting, and threat hunting.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "ETDAlerts_CL",
+              "baseQuery": "ETDAlerts_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "ETDAlerts_CL",
+              "lastDataReceivedQuery": "ETDAlerts_CL\n            | summarize Time = max(CreationTimestamp)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "ETDAlerts_CL\n            | summarize LastLogReceived = max(CreationTimestamp)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "List of events by severity",
+              "query": "ETDAlerts_CL\n            | where Message has \"TokenIssuedEvent\"\n            | extend MessageDetail = tostring(parse_json(tostring(Message.data)).message)\n            | project UpdatedOn, UserName, IPAddress = tostring(Message.ip), MessageDetail"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+              },
+              {
+                "name": "Microsoft.Insights/DataCollectionEndpoints, Microsoft.Insights/DataCollectionRules",
+                "description": "Read and write permissions to Data Collection Rules/Endpoints is required. Permissions to assign the Monitoring Metrics Publisher role to the Azure Function is required. [See the documentation to learn more about Data Collection Rules](https://docs.microsoft.com/azure/azure-monitor/platform/data-collection-rules)."
+              },
+              {
+                "name": "Azure Key Vault",
+                "description": "A Key Vault to hold SAP ETD client secret [See the documentation to learn more about Key Vault](https://docs.microsoft.com/azure/key-vault/general/overview)."
+              },
+              {
+                "name": "SAP ETD service key",
+                "description": "Connectivity and permissions to retrieve SAP ETD alerts via the API."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This connector uses Azure Functions to connect to SAP ETD alerts into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+            },
+            {
+              "description": "**Step 1 - Create a an Azure Key Vault**\n\n Refer to the [Azure Key Vault quickstart guide](https://learn.microsoft.com/azure/key-vault/general/quick-create-portal) for details. This key vault will hold a client secret required to access the ETD API."
+            },
+            {
+              "description": "**Step 2 - Configuration steps for the SAP ETD API**\n\nFollow the steps provided by SAP [see obtain client credentials for SAP ETD](https://<insert-link-here>). \n\n1. Take a note of the **url** (Audit Retrieval API URL), **uaa.url** (User Account and Authentication Server url) and the associated **uaa.clientid**.\n2. Add the **uaa.clientsecret** as a secret in the Key Vault created in Step 1 and take note of the **name** of the secret."
+            },
+            {
+              "description": "**Step 3 - Azure Resource Manager (ARM) Template**\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-sapetd-azuredeploy)\n2. Enter the values collected in steps 1 and 2 as parameters in the ARM template. Populate Key Vault name, name of the Key Vault secret, Audit Retrieval API URL, UAA Server URL, clientid.\n3. Click **Purchase** to deploy."
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "SAP ETD",
+        "publisherDisplayName": "SAP",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SAP%20ETD/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Sentinel Solution for SAP ETD integrates SAP Enterprise Threat Detection alerts into Microsoft Sentinel, allowing SOC teams to ingest, monitor, and hunt across SAP data. This integration enhances security by enabling faster detection, investigation, and mitigation of risks within SAP environments.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/SAPBTP.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "SAP ETD",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "SAP"
+        },
+        "support": {
+          "name": "SAP",
+          "tier": "Partner",
+          "link": "https://help.sap.com/docs/SAP_ENTERPRISE_THREAT_DETECTION_CLOUD_EDITION"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2024-10-29",
+        "lastPublishDate": "2024-10-29",
+        "providers": [
+          "SAP"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection",
+            "Identity",
+            "Application Security",
+            "Cyber Security Alerts"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
