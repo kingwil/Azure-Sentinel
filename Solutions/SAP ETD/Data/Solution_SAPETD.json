@@ -14,7 +14,7 @@
     "SavedSearches": [],
     "Hunting Queries": [],
     "Data Connectors": [
-        "/Data Connectors/SAPETD_API_FunctionApp.json"
+        "/Data Connectors/SAPETDPollerConnector/SAPETD_DataConnectorDefinition.json"
     ],
     "Watchlists": [],
     "WatchlistDescription": [],

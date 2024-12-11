@@ -1,0 +1,87 @@
+[
+    {
+        "name": "SAP-ETD-DCR",
+        "apiVersion": "2021-09-01-preview",
+        "type": "Microsoft.Insights/dataCollectionRules",
+        "location": "{{location}}",
+        "kind": null,
+        "properties": {
+            "streamDeclarations": {
+                "Custom-ETDAlerts_CL": {
+                    "columns": [
+                        {
+                            "name": "Version",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AlertId",
+                            "type": "int"
+                        },
+                        {
+                            "name": "PatternName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "PatternDescription",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Status",
+                            "type": "string"
+                        },
+                        {
+                            "name": "CreationTimestamp",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "MinTimestamp",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "MaxTimestamp",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "Score",
+                            "type": "int"
+                        },
+                        {
+                            "name": "Threshold",
+                            "type": "int"
+                        },
+                        {
+                            "name": "Measure",
+                            "type": "int"
+                        },
+                        {
+                            "name": "TriggeringEvents",
+                            "type": "dynamic"
+                        }
+                    ]
+                }
+            },
+            "dataSources": {},
+            "destinations": {
+                "logAnalytics": [
+                    {
+                        "workspaceResourceId": "{{workspaceResourceId}}",
+                        "name": "clv2ws1"
+                    }
+                ]
+            },
+            "dataFlows": [
+                {
+                    "streams": [
+                        "Custom-ETDAlerts_CL"
+                    ],
+                    "destinations": [
+                        "clv2ws1"
+                    ],
+                    "transformKql": "source| extend TimeGenerated = now()",
+                    "outputStream": "Custom-ETDAlerts_CL"
+                }
+            ],
+            "dataCollectionEndpointId": "{{dataCollectionEndpointId}}"
+        }
+    }
+]
