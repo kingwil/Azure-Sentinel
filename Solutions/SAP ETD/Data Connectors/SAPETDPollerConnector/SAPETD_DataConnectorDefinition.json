@@ -91,15 +91,6 @@
                                             {
                                                 "type": "Textbox",
                                                 "parameters": {
-                                                    "label": "Subaccount name (e.g. Contoso). This will be projected to the InstanceName column.",
-                                                    "placeholder": "no space or special character allowed!",
-                                                    "type": "text",
-                                                    "name": "subaccountName"
-                                                }
-                                            },
-                                            {
-                                                "type": "Textbox",
-                                                "parameters": {
                                                     "label": "SAP ETD Client ID",
                                                     "placeholder": "Client ID",
                                                     "type": "text",
