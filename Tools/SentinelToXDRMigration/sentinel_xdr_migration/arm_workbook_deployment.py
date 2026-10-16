@@ -239,7 +239,7 @@ def _principal(call, plan: dict) -> None:
             or str(account.get("tenantId", "")).casefold() != target["tenantId"].casefold()):
         raise ValueError("existing Azure CLI tenant/subscription mismatch; no login or account switch attempted")
     token = call(["account", "get-access-token", "--resource", ARM + "/",
-                  "--subscription", target["subscriptionId"], "--tenant", target["tenantId"]])
+                  "--subscription", target["subscriptionId"]])
     claims = _token_claims(token.get("accessToken", "")) or {}
     if (str(claims.get("tid", "")).casefold() != target["tenantId"].casefold()
             or str(claims.get("oid", "")).casefold() != plan["principalObjectId"].casefold()

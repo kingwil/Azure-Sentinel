@@ -116,6 +116,9 @@ class ArmWorkbookDeploymentTests(unittest.TestCase):
         if tail[:2] == ["account", "show"]:
             result = self.account
         elif tail[:2] == ["account", "get-access-token"]:
+            if "--subscription" in tail and "--tenant" in tail:
+                return subprocess.CompletedProcess(
+                    command, 1, "", "usage error: specify either --subscription or --tenant, not both")
             payload = base64.urlsafe_b64encode(json.dumps(self.claims).encode()).decode().rstrip("=")
             result = {"accessToken": "header." + payload + ".signature"}
         elif tail[:3] == ["deployment", "group", "validate"]:
@@ -186,6 +189,53 @@ class ArmWorkbookDeploymentTests(unittest.TestCase):
                 self.assertNotEqual(result["status"], "arm-succeeded")
                 if state == "Failed":
                     self.assertEqual(result["error"]["code"], "SyntheticFailure")
+
+    def test_token_command_uses_subscription_without_tenant_on_both_checks(self):
+        rejected = self.runner([str(self.cli), "account", "get-access-token",
+                                "--subscription", SUBSCRIPTION, "--tenant", TENANT])
+        self.assertNotEqual(rejected.returncode, 0)
+        self.calls.clear()
+        plan = self.plan()
+        self.review(plan)
+        self.assertEqual(self.execute(plan)["status"], "arm-succeeded")
+        tokens = [command for command in self.calls if command[1:3] == ["account", "get-access-token"]]
+        self.assertEqual(len(tokens), 2)
+        for command in tokens:
+            self.assertEqual(command[command.index("--subscription") + 1], SUBSCRIPTION)
+            self.assertNotIn("--tenant", command)
+
+    def test_wrong_token_tenant_blocks_before_validation_or_reservation(self):
+        plan = self.plan()
+        self.review(plan)
+        self.claims["tid"] = PRINCIPAL
+        result = self.execute(plan)
+        self.assertEqual(result["status"], "blocked")
+        self.assertFalse(result["writeAttempted"])
+        self.assertIn("exact approved", result["error"])
+        self.assertEqual(Path(result["evidencePath"]).name, "preflight.json")
+        self.assertFalse((Path(plan["planPath"]).parent / "attempt.json").exists())
+        self.assertFalse(any("validate" in command for command in self.calls))
+        self.assert_no_put()
+        self.assertFalse(json.loads(Path(result["evidencePath"]).read_bytes())["writeAttempted"])
+
+    def test_token_preflight_failure_allows_same_unchanged_approved_plan(self):
+        plan = self.plan()
+        self.review(plan)
+        directory = Path(plan["planPath"]).parent
+        snapshots = {name: (directory / name).read_bytes() for name in
+                     ("plan.json", "template.json", "parameters.json", "request.json", "review.json")}
+        self.failed_command = "get-access-token"
+        result = self.execute(plan)
+        self.assertEqual(result["status"], "blocked")
+        self.assertFalse(result["writeAttempted"])
+        self.assertFalse((directory / "attempt.json").exists())
+        self.assert_no_put()
+        self.failed_command = None
+        self.assertEqual(self.execute(plan)["status"], "arm-succeeded")
+        for name, raw in snapshots.items():
+            self.assertEqual((directory / name).read_bytes(), raw)
+        with self.assertRaisesRegex(ValueError, "reconcile"):
+            self.execute(plan)
 
     def test_provider_validation_failure_and_missing_state_block_put(self):
         for validation in ({"properties": {"provisioningState": "Failed"}},

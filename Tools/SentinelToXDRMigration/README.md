@@ -2934,8 +2934,10 @@ one hour, and may be revoked using the same command with `--decision revoke`.
 cached ARM token's audience, tenant, expiry, delegated `user_impersonation` scope
 and exact user object ID. Token claims are diagnostics of the selected cached
 identity, not proof of permissions; ARM authenticates and authorizes the actual
-requests. No login, account switch, Graph/AH token, new credentials or permission
-grants are attempted. Workspace GET verifies the full ARM/customer identity and
+requests. Token acquisition selects `--subscription` only (Azure CLI rejects
+combining it with `--tenant`); the returned token's `tid` must still match the
+exact approved tenant. No login, account switch, Graph/AH token, new credentials
+or permission grants are attempted. Workspace GET verifies the full ARM/customer identity and
 location. Execution reruns `az deployment group validate --validation-level
 Provider` against the planned compact template and exact parameter file;
 only an actual `Succeeded` result permits submission. External success flags,
@@ -2954,6 +2956,14 @@ timeouts and ambiguous submissions remain durable failed/unknown results and
 return nonzero. Polling is bounded to 30 minutes. An existing attempt blocks
 resubmission: reconcile its authoritative result before seeking a new approval,
 never delete evidence to retry automatically.
+
+A blocked preflight recorded in `preflight.json` with `writeAttempted=false`
+and no `attempt.json` has not reserved or submitted a deployment. The same
+unchanged plan may be rerun after resolving the preflight error, subject to all
+existing gates, including a current, unrevoked one-hour review and immediate
+exact-scope write confirmation. An expired review requires renewed explicit
+approval of the same hash; changed plan inputs require a new plan and approval.
+Never remove an existing attempt to enable a retry.
 
 **Provider validation is not a deployment.** Even `arm-succeeded` proves only
 normal ARM deployment acceptance plus deployment-record readback; it does not
