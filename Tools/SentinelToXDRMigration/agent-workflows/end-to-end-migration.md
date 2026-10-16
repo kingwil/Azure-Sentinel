@@ -125,13 +125,33 @@ also requires explicit immediate confirmation and verified access, disabled
 content and ownership; consent never grants permissions or authorizes ingestion,
 activation or cleanup. This is not a reinterpretation of legacy consent.
 
-**Defender workbook dispatch remains blocked:** the evidence-based preflight
+**Extension-direct Defender workbook dispatch remains blocked:** the evidence-based preflight
 adapter checks target, authenticated ARM principal, effective control-plane
 access, applicable role/deny assignments, disabled content and exact identities,
 but the MicrosoftSecurity extension authentication/write contract is unverified.
 Unknown evidence blocks dispatch. Do not replace this blocker with asserted
 readiness flags, infer support from a mock, reuse an unrelated Graph/AH token
 as the extension identity, or treat local tests as provider acceptance.
+
+This restriction is not a prohibition on normal ARM resource-group template
+deployment. The separate, explicitly approved
+[`arm_workbook_deployment` route](../README.md#normal-arm-workbook-only-deployment)
+submits the whole reviewed V3.1 template through authenticated Azure CLI ARM,
+with `DeployDefenderWorkbook=true` and **every other declared `Deploy*` flag
+explicitly false**. ARM, not the toolkit, handles the nested preview provider.
+This narrow Qualification acceptance-only route does not dispatch extension
+requests or assert a Graph/extension authentication contract. It checks clean
+authored review receipts, package projection/ZIP, exact target and delegated
+ARM user identity, binds original and semantically compact template bytes,
+parameters and all selected/unconditional resources to review and immediate
+write confirmation, and reruns Provider validation on those exact inputs.
+Provider validation is permission/template evidence, **not successful write**.
+Only polling the exact ARM deployment record to `Succeeded` records
+`arm-succeeded`; installation/provenance readback, repeat-install/update,
+runtime query/UI qualification and all existing workflow gates remain separate.
+No receipt from this route upgrades those gates or marks the extension-direct
+contract verified. No default all-content flags, automatic retries, grants,
+ingestion, activation or browser operations are authorized.
 
 #### Candidate ARM metadata preflight
 
