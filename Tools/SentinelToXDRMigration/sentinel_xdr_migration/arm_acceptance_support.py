@@ -54,9 +54,11 @@ def _run_cli(
     command: list[str],
     *,
     runner: CommandRunner | None = None,
+    azure_cli: str | None = None,
+    timeout_seconds: float = 1800,
 ) -> tuple[int, Any, str]:
     run = runner or subprocess.run
-    executable = shutil.which("az")
+    executable = azure_cli or shutil.which("az")
     if executable is None:
         return 127, None, "Azure CLI is not installed or not available on PATH"
     try:
@@ -65,13 +67,13 @@ def _run_cli(
             capture_output=True,
             text=True,
             check=False,
-            timeout=1800,
+            timeout=timeout_seconds,
         )
     except subprocess.TimeoutExpired:
         return (
             124,
             None,
-            "Azure CLI command timed out after 1800 seconds; write outcome may be ambiguous",
+            f"Azure CLI command timed out after {timeout_seconds:g} seconds; write outcome may be ambiguous",
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return (

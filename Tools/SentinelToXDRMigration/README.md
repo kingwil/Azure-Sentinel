@@ -594,7 +594,11 @@ now checks the selected lab, authenticated ARM principal, effective control-plan
 access, applicable role/deny assignments, disabled content and exact resource
 identities. Unresolved evidence blocks dispatch rather than asserting readiness.
 The MicrosoftSecurity extension authentication/write contract remains unverified,
-so the current default adapter still blocks Defender workbook deployment.
+so the extension-direct adapter still blocks Defender workbook dispatch. This
+does not block the separately reviewed
+[normal ARM workbook-only deployment](#normal-arm-workbook-only-deployment)
+route; ARM handles the nested preview provider without toolkit-invented
+Graph/extension credentials.
 
 After `workflow-arm-plan`, use `workflow-arm-preflight-plan` to display the
 bounded metadata read operations, then `workflow-arm-preflight-review` with
@@ -2863,6 +2867,114 @@ do not pass or wait for a `what-if` result for that route. Ordinary ARM
 previews do not prove extension acceptance, and ARM validation must not be
 described as validating extension behavior. Approved deployment and readback
 remain necessary.
+
+### Normal ARM workbook-only deployment
+
+This is a supported, narrow **Qualification acceptance-only** route, separate
+from both the extension-direct executor and the all-content acceptance batch
+below. It submits the **whole** current V3.1 `Package/mainTemplate.json` to the
+normal ARM resource-group Deployments API in Incremental mode, using the
+existing authenticated Azure CLI profile. It never changes public templates,
+versions, workbook IDs, query strings, or original deployment tools.
+
+The route requires the selected clean authored workbooks' current private review
+receipts, verifies the complete existing workbook package projection and the
+exact versioned ZIP template, and binds current package input identity. The
+offline plan includes the exact tenant, subscription, resource group, workspace
+ARM/customer IDs, location, approved delegated user object ID, Azure CLI/profile,
+original template hash, semantically compact template hash, parameter/request
+hashes, and every effective resource. All declared `Deploy*` parameters are sent
+explicitly: **only `DeployDefenderWorkbook` is true**. Unknown resource kinds,
+cross-target scopes and permission grants fail closed. Unconditional package
+registrations/nested deployments and required savedSearch functions, if present,
+are **not** suppressed; review their exact type, scope, path and ARM name
+expressions in `resources`. This is not “workbook objects only” or a no-impact
+update. It may overwrite existing same-identity resources.
+
+JSON parsing/compact serialization changes syntax whitespace only, never
+whitespace inside strings. Both source bytes and compact bytes are bound; a
+formatting change still requires a new plan. The full deployment request
+envelope must fit ARM's 4 MiB request limit, including a conservative bound for
+CLI JSON reserialization. Oversize inputs are rejected, not split or edited.
+Evidence and snapshots live only under gitignored, untracked
+`Solutions\<solution>\Logs\arm-workbook-deployment\<plan-sha256>`.
+
+Run from the installed toolkit environment, or from
+`Tools\SentinelToXDRMigration` with that environment's Python:
+
+```powershell
+# Credential-free target.json: tenantId, subscriptionId,
+# workspaceResourceId (full ARM ID), workspaceCustomerId.
+# Obtain the exact user object ID from the approved existing ARM identity;
+# a display name/account UPN is not sufficient.
+python -m sentinel_xdr_migration.arm_workbook_deployment plan `
+  --workflow-profile qualification `
+  --solution "<absolute solution directory>" --target "<target.json>" `
+  --location "<workspace Azure region>" --principal-object-id "<approved user oid>" `
+  --azure-cli "<absolute az.cmd or az executable>" `
+  --azure-config-dir "<existing approved Azure CLI profile directory>"
+
+# Present the entire plan (including unconditional resources) to the user.
+# A maintainer implementation request is NOT approval to execute that plan.
+python -m sentinel_xdr_migration.arm_workbook_deployment review `
+  --plan "<returned planPath>" --expected-plan-sha256 "<returned planSha256>" `
+  --actor "<approving user>" --reference "<exact user scope approval reference>" `
+  --decision approve
+
+# Only after a separate, immediate exact-scope write confirmation:
+python -m sentinel_xdr_migration.arm_workbook_deployment execute `
+  --plan "<same planPath>" --expected-plan-sha256 "<same planSha256>" `
+  --actor "<same approving user>" `
+  --confirm-exact-scope-write "I approve this exact normal ARM workbook deployment and enumerated registrations"
+```
+
+`plan` is offline. `review` authorizes only that hash-bound scope, is valid for
+one hour, and may be revoked using the same command with `--decision revoke`.
+`execute` first checks the existing CLI account's tenant/subscription and the
+cached ARM token's audience, tenant, expiry, delegated `user_impersonation` scope
+and exact user object ID. Token claims are diagnostics of the selected cached
+identity, not proof of permissions; ARM authenticates and authorizes the actual
+requests. Token acquisition selects `--subscription` only (Azure CLI rejects
+combining it with `--tenant`); the returned token's `tid` must still match the
+exact approved tenant. No login, account switch, Graph/AH token, new credentials
+or permission grants are attempted. Workspace GET verifies the full ARM/customer identity and
+location. Execution reruns `az deployment group validate --validation-level
+Provider` against the planned compact template and exact parameter file;
+only an actual `Succeeded` result permits submission. External success flags,
+fixture results and earlier validation logs cannot substitute for this check.
+
+Immediately before submission, execution rechecks principal, all inputs,
+snapshots and review. It durably reserves a single attempt, then uses authenticated
+`az rest --method put` with the compact full request against
+`Microsoft.Resources/deployments` (API `2025-04-01`), and polls only that exact
+deployment record by ARM GET. This is the normal resource-group template
+deployment API, **not an extension-direct request**:
+[Create or Update](https://learn.microsoft.com/rest/api/resources/deployments/create-or-update?view=rest-resources-2025-04-01).
+Only terminal `Succeeded` with matching deployment identity records
+`status=arm-succeeded`. Provider errors, `Failed`, `Canceled`, missing state,
+timeouts and ambiguous submissions remain durable failed/unknown results and
+return nonzero. Polling is bounded to 30 minutes. An existing attempt blocks
+resubmission: reconcile its authoritative result before seeking a new approval,
+never delete evidence to retry automatically.
+
+A blocked preflight recorded in `preflight.json` with `writeAttempted=false`
+and no `attempt.json` has not reserved or submitted a deployment. The same
+unchanged plan may be rerun after resolving the preflight error, subject to all
+existing gates, including a current, unrevoked one-hour review and immediate
+exact-scope write confirmation. An expired review requires renewed explicit
+approval of the same hash; changed plan inputs require a new plan and approval.
+Never remove an existing attempt to enable a retry.
+
+**Provider validation is not a deployment.** Even `arm-succeeded` proves only
+normal ARM deployment acceptance plus deployment-record readback; it does not
+prove exact workbook installation/registration, repeat-install/update semantics,
+query runtime, UI behavior or completed Qualification. The receipt leaves
+`installationVerified`, `runtimeVerified`, `qualificationCompleted` and
+`extensionDirectContractVerified` false. Independent content readback and all
+existing workflow/provenance/qualification gates remain required; this receipt
+does not complete or import into them. Mock tests exercise gates only and are
+not live provider evidence. Advanced Hunting, ingestion, browser UI, detection
+enablement and cleanup are outside the approval scope.
 
 ### Post-validation ARM template deployment acceptance-only
 
