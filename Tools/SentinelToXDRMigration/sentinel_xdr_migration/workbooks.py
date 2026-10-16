@@ -115,6 +115,92 @@ def _identity(root: Path, relative: str, document: dict) -> str:
     return str(uuid5(NAMESPACE_URL, f"sentinel-workbook:{root.name}:{relative}"))
 
 
+def _catalog_template_path(value) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    parts = PurePosixPath(value.strip().replace("\\", "/")).parts
+    workbook_directory = next(
+        (index for index in range(len(parts) - 1, -1, -1)
+         if parts[index].casefold() == "workbooks"),
+        None,
+    )
+    if workbook_directory is not None:
+        parts = parts[workbook_directory + 1:]
+    return PurePosixPath(*parts).as_posix().casefold() if parts else None
+
+
+def _catalog_title(root: Path, source_path: Path, source: dict) -> str | None:
+    solutions = next((parent for parent in root.parents
+                      if parent.name.casefold() == "solutions"), None)
+    if solutions is None:
+        return None
+    catalog_path = solutions.parent / "Workbooks" / "WorkbooksMetadata.json"
+    if not catalog_path.exists():
+        return None
+    if catalog_path.is_symlink() or not catalog_path.is_file():
+        raise ValueError(f"Workbook metadata catalog must be a regular file: {catalog_path}")
+    try:
+        catalog = _load_json(catalog_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise ValueError(f"Unable to read workbook metadata catalog {catalog_path}: {exc}") from exc
+    if not isinstance(catalog, list) or any(not isinstance(entry, dict) for entry in catalog):
+        raise ValueError(f"Workbook metadata catalog must be an array of objects: {catalog_path}")
+
+    relative = source_path.relative_to(root).as_posix()
+    source_relative = relative.removeprefix("Workbooks/").casefold()
+    basename = PurePosixPath(relative).name.casefold()
+    exact, basename_matches = [], []
+    for entry in catalog:
+        template = _catalog_template_path(entry.get("templateRelativePath"))
+        if template == source_relative:
+            exact.append(entry)
+        elif template and PurePosixPath(template).name == basename:
+            basename_matches.append(entry)
+    matches = exact or basename_matches
+    if not matches:
+        return None
+    if len(matches) > 1:
+        metadata = source.get("metadata") or {}
+        source_keys = {
+            value.strip().casefold()
+            for value in (
+                source.get("fromTemplateId"),
+                source.get("id"),
+                metadata.get("contentId") if isinstance(metadata, dict) else None,
+                metadata.get("workbookId") if isinstance(metadata, dict) else None,
+            )
+            if isinstance(value, str) and value.strip()
+        }
+        keyed_matches = [
+            entry for entry in matches
+            if isinstance(entry.get("workbookKey"), str)
+            and entry["workbookKey"].strip().casefold() in source_keys
+        ]
+        if len(keyed_matches) == 1:
+            matches = keyed_matches
+        else:
+            raise ValueError(
+                f"Ambiguous workbook metadata catalog match for {relative}; "
+                f"check templateRelativePath/workbookKey in {catalog_path}."
+            )
+    title = matches[0].get("title")
+    if not isinstance(title, str) or not title.strip():
+        raise ValueError(
+            f"Workbook metadata catalog entry for {relative} has no title: {catalog_path}"
+        )
+    return title.strip()
+
+
+def _display_name(root: Path, path: Path, source: dict) -> str:
+    metadata = source.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        raise ValueError("Workbook metadata must be an object.")
+    name = metadata.get("name")
+    if isinstance(name, str) and name.strip():
+        return name
+    return _catalog_title(root, path, source) or path.stem
+
+
 def inventory_workbooks(solution) -> list[dict]:
     root = _root(solution)
     result, identities = [], set()
@@ -352,7 +438,7 @@ def convert_workbooks(solution, *, config=None, report_directory=None, overwrite
         target["xdrMetadata"] = {
             "contentId": canonical, "instanceId": instance, "version": version,
             "schemaVersion": "1.0.0",
-            "displayName": (source.get("metadata") or {}).get("name") or path.stem,
+            "displayName": _display_name(root, path, source),
         }
         source_metadata = source.get("metadata") or {}
         target["contentProvenance"] = {

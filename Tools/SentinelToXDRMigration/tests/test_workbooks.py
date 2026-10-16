@@ -94,6 +94,95 @@ def authored(solution):
     return solution / "XDR Workbooks/nested/fixture.json"
 
 
+def _catalog_solution(tmp_path, *, name=None, catalog=None):
+    repository = tmp_path / "repository"
+    root = repository / "Solutions" / "Fixture"
+    (root / "Workbooks/nested").mkdir(parents=True)
+    (root / "Data").mkdir()
+    (root / "Data/Solution_Fixture.json").write_text(json.dumps({"Version": "3.2.0"}))
+    source = {
+        "version": "Notebook/1.0",
+        "fromTemplateId": str(uuid4()),
+        "items": [{"type": 3, "content": {
+            "query": "DeviceEvents | summarize count() by ActionType",
+            "queryType": 0, "resourceType": workbook.LA,
+        }}],
+    }
+    if name is not None:
+        source["metadata"] = {"name": name}
+    (root / "Workbooks/nested/fixture.json").write_text(json.dumps(source))
+    if catalog is not None:
+        catalog_path = repository / "Workbooks/WorkbooksMetadata.json"
+        catalog_path.parent.mkdir()
+        catalog_path.write_text(catalog if isinstance(catalog, str) else json.dumps(catalog))
+    return root
+
+
+def _convert_catalog_solution(solution):
+    return workbooks.convert_workbooks(
+        solution,
+        config=config(solution),
+        report_directory=solution / "Logs/run",
+    )
+
+
+@pytest.mark.parametrize("template_path", [
+    "nested/fixture.json",
+    "Workbooks\\nested\\fixture.json",
+    "fixture.json",
+])
+def test_catalog_title_fills_missing_source_name_using_template_path(tmp_path, template_path):
+    solution = _catalog_solution(tmp_path, catalog=[{
+        "workbookKey": "FixtureWorkbook",
+        "templateRelativePath": template_path,
+        "title": "Friendly fixture title",
+    }])
+
+    _convert_catalog_solution(solution)
+
+    output = json.loads(authored(solution).read_text())
+    assert output["xdrMetadata"]["displayName"] == "Friendly fixture title"
+
+
+def test_source_name_takes_precedence_over_catalog_title(tmp_path):
+    solution = _catalog_solution(tmp_path, name="Authored title", catalog=[{
+        "workbookKey": "FixtureWorkbook",
+        "templateRelativePath": "fixture.json",
+        "title": "Catalog title",
+    }])
+
+    _convert_catalog_solution(solution)
+
+    output = json.loads(authored(solution).read_text())
+    assert output["xdrMetadata"]["displayName"] == "Authored title"
+
+
+def test_catalog_ambiguity_is_an_actionable_error(tmp_path):
+    solution = _catalog_solution(tmp_path, catalog=[
+        {"workbookKey": "First", "templateRelativePath": "fixture.json", "title": "First"},
+        {"workbookKey": "Second", "templateRelativePath": "fixture.json", "title": "Second"},
+    ])
+
+    with pytest.raises(ValueError, match="Ambiguous workbook metadata catalog match"):
+        _convert_catalog_solution(solution)
+
+
+def test_missing_catalog_retains_filename_fallback(tmp_path):
+    solution = _catalog_solution(tmp_path)
+
+    _convert_catalog_solution(solution)
+
+    output = json.loads(authored(solution).read_text())
+    assert output["xdrMetadata"]["displayName"] == "fixture"
+
+
+def test_malformed_catalog_is_an_actionable_error(tmp_path):
+    solution = _catalog_solution(tmp_path, catalog="{not json")
+
+    with pytest.raises(ValueError, match="Unable to read workbook metadata catalog"):
+        _convert_catalog_solution(solution)
+
+
 def test_endpoint_type_labels_and_summary_groupings_are_deterministic():
     labels = rewrite.rewrite(TYPE_LABEL_QUERY, ENDPOINT_TABLES)
     assert labels["deterministic"] is True

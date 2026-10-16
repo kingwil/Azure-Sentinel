@@ -108,6 +108,14 @@ the stable installation GUID; its content version inherits the selected solution
 release. The Notebook format version and original source metadata version remain
 separate.
 
+The authored `xdrMetadata.displayName` prefers a nonempty source
+`metadata.name`. If absent, conversion uses the repository
+`Workbooks/WorkbooksMetadata.json` title matched by `templateRelativePath`
+(including the catalog's filename-only convention); a filename fallback is
+retained when the catalog or a matching entry is unavailable. Ambiguous catalog
+matches and malformed catalogs fail with an actionable error rather than
+choosing an arbitrary title.
+
 `sentinel_xdr_migration.workbooks` exposes `inventory_workbooks`,
 `convert_workbooks`, `validate_workbooks`, and `selected_workbook_files`.
 Conversion is offline. Reviewed resolution records bind each original query
